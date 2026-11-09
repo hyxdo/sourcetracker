@@ -36,6 +36,12 @@ def test_removing_a_middle_article_keeps_what_is_upstream():
     assert g.holding({"c"}) == {1}
 
 
+def test_a_dependent_claim_falls_with_its_source_even_if_the_evidence_holds():
+    g = graph({1: "a", 2: "b"}, {1: [Support("x")], 2: [Support("y", 1)]})
+    assert g.holding() == {1, 2}
+    assert g.holding({"y"}) == {1}
+
+
 def test_a_removed_article_loses_its_own_claims():
     g = graph({1: "a"}, {1: [Support("x")]})
     assert g.holding({"a"}) == set()

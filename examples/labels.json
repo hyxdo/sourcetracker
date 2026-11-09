@@ -1,0 +1,30 @@
+{
+  "_note": "Demonstration labels for the fictional sample corpus. They show the file format and exercise the scoring code. They are not an evaluation on real articles.",
+  "articles": {
+    "tribune-report": {
+      "citations": [
+        {"claim": "nearly tripled between 2019 and 2022", "target": "harbor-survey", "label": "supported", "gold_quote": "from four to eleven animals"},
+        {"claim": "kelp canopy above the northern reef", "target": "harbor-survey", "label": "supported", "gold_quote": "shrank by sixty percent"},
+        {"claim": "close to the otter raft", "target": "otter-study", "label": "supported", "gold_quote": "forty percent fewer urchins"}
+      ],
+      "repetitions": []
+    },
+    "coastal-blog": {
+      "citations": [
+        {"claim": "Property values along the waterfront", "target": "city-budget", "label": "not_supported"},
+        {"claim": "set aside $3 million", "target": "city-budget", "label": "not_supported"}
+      ],
+      "repetitions": [
+        {"claim": "almost nobody is talking about it", "source": "harbor-survey"}
+      ]
+    },
+    "policy-brief": {
+      "citations": [
+        {"claim": "nearly tripled between 2019 and 2022", "target": "tribune-report", "label": "supported", "gold_quote": "nearly tripled"},
+        {"claim": "shrank by sixty percent", "target": "tribune-report", "label": "supported", "gold_quote": "shrank by sixty percent"},
+        {"claim": "near the otter raft", "target": "otter-study", "label": "supported", "gold_quote": "forty percent fewer urchins"}
+      ],
+      "repetitions": []
+    }
+  }
+}

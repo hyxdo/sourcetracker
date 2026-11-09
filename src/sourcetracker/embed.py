@@ -72,7 +72,7 @@ class SentenceTransformerEmbedder:
     """Sentence embeddings from a pretrained model, downloaded on first use."""
 
     name = "minilm"
-    thresholds = Thresholds(match=0.5, similar=0.75, premise=0.3)
+    thresholds = Thresholds(match=0.5, similar=0.85, premise=0.5)
     model_name = "sentence-transformers/all-MiniLM-L6-v2"
 
     def __init__(self) -> None:

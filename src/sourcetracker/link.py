@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -111,12 +112,23 @@ def _explained_by_citations(
     return b.article_id in reach_a or a.article_id in reach_b or bool(reach_a & reach_b)
 
 
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _published_before(a: str | None, b: str | None) -> bool:
+    """Tell whether date a is known to come before date b."""
+    first = _ISO_DATE.match(a or "")
+    second = _ISO_DATE.match(b or "")
+    return bool(first and second) and first.group() < second.group()
+
+
 def _link_repetition(index: Index, threshold: float) -> None:
     """Record text that resembles a claim where no citation path explains it."""
     claims = index.claims()
     citations = index.citations()
     if not claims:
         return
+    published = {article.id: article.published for article in index.articles()}
     _, vectors = index.claim_vectors()
     edges = citation_edges(claims, citations)
     cited: dict[int, set[str]] = defaultdict(set)
@@ -125,19 +137,32 @@ def _link_repetition(index: Index, threshold: float) -> None:
             cited[citation.claim_id].add(citation.target_article_id)
     reach = {claim_id: reachable(edges, targets) for claim_id, targets in cited.items()}
 
+    # A claim that names a source it really matches is already attributed.
+    attributed = {c.claim_id for c in citations if c.status in (MATCHED, EXTERNAL)}
     eligible = np.array([len(c.text.split()) >= MIN_REPETITION_WORDS for c in claims])
     for i, claim in enumerate(claims):
-        if not eligible[i]:
+        if not eligible[i] or claim.id in attributed:
             continue
         scores = vectors @ vectors[i]
-        best_by_passage: dict[int, float] = {}
+        hits: list[tuple[ClaimRow, float]] = []
         for j in np.flatnonzero((scores >= threshold) & eligible):
             other = claims[int(j)]
             if other.article_id == claim.article_id:
                 continue
+            # An article can't repeat something that was published after it.
+            if _published_before(published[claim.article_id], published[other.article_id]):
+                continue
             if _explained_by_citations(claim, other, reach):
                 continue
-            score = float(scores[j])
+            hits.append((other, float(scores[j])))
+
+        # If the claim resembles both a source and an article relaying that
+        # source, only the source is worth reporting.
+        found = {other.article_id for other, _ in hits}
+        best_by_passage: dict[int, float] = {}
+        for other, score in hits:
+            if (reach.get(other.id, set()) - {other.article_id}) & found:
+                continue
             if score > best_by_passage.get(other.passage_id, -1.0):
                 best_by_passage[other.passage_id] = score
         ranked = sorted(best_by_passage.items(), key=lambda item: (-item[1], item[0]))

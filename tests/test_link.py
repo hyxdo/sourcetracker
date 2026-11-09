@@ -61,10 +61,8 @@ def test_citation_resolves_by_url(make_index):
             "report": "Urchin numbers doubled near the northern harbor [link](http://example.org/study).",
         }
     )
-    citation = citations_of(index, "Urchin numbers doubled near the northern harbor [")if False else [
-        c for c in index.citations() if c.target_article_id == "study"
-    ][0]
-    assert citation.status == MATCHED
+    citations = [c for c in index.citations() if c.target_article_id == "study"]
+    assert [c.status for c in citations] == [MATCHED]
 
 
 def test_self_citation_gives_no_support(make_index):
@@ -95,6 +93,32 @@ def test_uncited_repetition_is_kept_apart_from_citations(make_index):
     assert SupportGraph.from_index(index).holding() == set()
 
 
+def dated(date: str, body: str) -> str:
+    return f"---\npublished: {date}\n---\n{body}"
+
+
+REPEATED = "Urchin numbers doubled near the northern harbor during the survey."
+
+
+def test_only_the_later_article_is_reported_as_repeating(make_index):
+    index = make_index(
+        {"early": dated("2023-03-14", REPEATED), "late": dated("2023-05-11", REPEATED)}
+    )
+    assert repeated(index) == {("late", "early")}
+
+
+def test_repetition_runs_both_ways_when_the_order_is_unknown(make_index):
+    index = make_index({"early": dated("2023-03-14", REPEATED), "undated": REPEATED})
+    assert repeated(index) == {("early", "undated"), ("undated", "early")}
+
+
+def test_repetition_runs_both_ways_on_the_same_day(make_index):
+    index = make_index(
+        {"one": dated("2023-03-14", REPEATED), "two": dated("2023-03-14T09:00:00Z", REPEATED)}
+    )
+    assert repeated(index) == {("one", "two"), ("two", "one")}
+
+
 def test_cited_text_is_not_reported_as_repetition(make_index):
     index = make_index(
         {
@@ -119,6 +143,42 @@ def test_two_articles_citing_one_source_are_not_repeating_each_other(make_index)
         {"study": STUDY, "one": f"{claim} [@study].", "two": f"{claim} [@study]."}
     )
     assert repeated(index) == set()
+
+
+def test_a_correctly_cited_claim_is_not_repeating_anyone(make_index):
+    index = make_index(
+        {"study": REPEATED, "report": f"{REPEATED[:-1]} [@study].", "blog": REPEATED}
+    )
+    assert ("report", "blog") not in repeated(index)
+
+
+def test_a_claim_citing_the_wrong_source_can_still_be_repetition(make_index):
+    index = make_index(
+        {
+            "unrelated": "The mayor approved parking meters downtown yesterday afternoon.",
+            "original": REPEATED,
+            "copier": f"{REPEATED[:-1]} [@unrelated].",
+        }
+    )
+    assert ("copier", "original") in repeated(index)
+
+
+def test_uncited_text_is_traced_to_the_source_rather_than_its_relay(make_index):
+    index = make_index(
+        {"study": REPEATED, "relay": f"{REPEATED[:-1]} [@study].", "blog": REPEATED}
+    )
+    assert repeated(index) == {("blog", "study"), ("study", "blog")}
+
+
+def test_a_relay_is_reported_when_its_source_does_not_resemble_the_claim(make_index):
+    index = make_index(
+        {
+            "study": "Sampling covered forty fixed transects across the whole northern reef system.",
+            "relay": f"{REPEATED[:-1]} [@study].",
+            "blog": REPEATED,
+        }
+    )
+    assert ("blog", "relay") in repeated(index)
 
 
 def test_short_sentences_are_not_treated_as_repetition(make_index):
@@ -168,6 +228,23 @@ def test_conclusion_loses_support_through_a_chain(make_index):
     assert [c.claim_id for c in impact.conclusions] == [conclusion.id]
     assert impact.conclusions[0].status == "lost"
     assert impact.conclusions[0].removed_source == "study"
+
+
+def test_citing_a_conclusion_depends_on_what_that_conclusion_rests_on(make_index):
+    index = make_index(
+        {
+            "study": STUDY,
+            "brief": (
+                "Urchin numbers doubled near the northern harbor [@study]. "
+                "Therefore urchin numbers near the northern harbor need monitoring."
+            ),
+            "column": "Urchin numbers near the northern harbor need monitoring [@brief].",
+        }
+    )
+    graph = SupportGraph.from_index(index)
+    column = next(c for c in index.claims() if c.article_id == "column")
+    assert column.id in graph.holding()
+    assert column.id not in graph.holding({"study"})
 
 
 def test_a_failed_citation_breaks_the_chain_above_it(make_index):
